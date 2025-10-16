@@ -19,7 +19,7 @@ from modules.generation.src.claim_evaluation_methods.rafe import ClaimEvaluator 
 
 import os
 os.environ["OPENAI_API_KEY"] = 'your_open_ai_key' #to use openai models
-os.environ['SERPER_API_KEY'] = '7cd44c64310c60cd6ad89d1269a416970f403d3b549ec1d9f3f8416a49b9b18b' #for long form generation evaluation: https://serper.dev/
+os.environ['SERPER_API_KEY'] = 'your_serper_key' #for long form generation evaluation: https://serper.dev/
 
 def generation(args):
     # === MultiGPU setup ========================
