@@ -10,16 +10,15 @@ from tqdm import tqdm
 from datasets import load_dataset
 from accelerate import Accelerator
 
-
 from utils.general_utils import set_seed
 from modules.generation.src.generation_models import *
 from modules.generation.src.decomposition_methods import *
 from modules.generation.src.claim_evaluation_methods.safe import ClaimEvaluator as SafeClaimEvaluator
 from modules.generation.src.claim_evaluation_methods.rafe import ClaimEvaluator as RafeClaimEvaluator
 
-import os
 os.environ["OPENAI_API_KEY"] = 'your_open_ai_key' #to use openai models
 os.environ['SERPER_API_KEY'] = 'your_serper_key' #for long form generation evaluation: https://serper.dev/
+
 
 def generation(args):
     # === MultiGPU setup ========================
@@ -48,7 +47,7 @@ def generation(args):
     data_path = f"data/processed_testset/{args.dataset}.jsonl"
     test_dataset_ = load_dataset("json", data_files=data_path, split="train")
     
-    # ====== Subsampling the dataset ============
+    # === Subsampling the dataset ===============
     if args.fraction_of_data_to_use < 1.0:
         shuffled_dataset = test_dataset_.shuffle(seed=args.seed)
         num_samples = int(args.fraction_of_data_to_use * len(shuffled_dataset))
@@ -89,9 +88,22 @@ def generation(args):
     decomposition_method = StructuredDecompositionLocal(backbone_model, backbone_tokenizer, decomposition_depth=1) #Utilize HF models to decompose text
     if args.claim_evaluation_method == "SAFE":
         # claim_evaluator = ClaimEvaluator(rater='gpt-4o-mini', tokenizer = None, max_steps = 5, max_retries = 10, num_searches = 3)
-        claim_evaluator = SafeClaimEvaluator(rater=backbone_model, tokenizer = backbone_tokenizer, max_steps = 5, max_retries = 10, num_searches = 3)
+        claim_evaluator = SafeClaimEvaluator(
+            rater=backbone_model,
+            tokenizer = backbone_tokenizer,
+            max_steps = 5,
+            max_retries = 10,
+            num_searches = 3
+        )
     elif args.claim_evaluation_method == "RAFE":
-        claim_evaluator = RafeClaimEvaluator(rater=backbone_model, tokenizer = backbone_tokenizer, args=args, max_steps = 5, max_retries = 10, num_searches = 3)
+        claim_evaluator = RafeClaimEvaluator(
+            rater=backbone_model,
+            tokenizer = backbone_tokenizer,
+            args=args,
+            max_steps = 5,
+            max_retries = 10,
+            num_searches = 3
+        )
     else:
         raise NotImplementedError
 
@@ -135,7 +147,6 @@ def generation(args):
                 }
                 res_f.write(json.dumps(item) + '\n')
 
-
 def merge_result_files(args):
     results_shard_files = f"{args.output_dir}/generation_results_rank*.jsonl"
     results_shard_files = sorted(glob.glob(results_shard_files))
@@ -151,7 +162,6 @@ def merge_result_files(args):
             print(f"Deleted shard file: {shard_file}")
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
@@ -163,11 +173,14 @@ if __name__ == "__main__":
     parser.add_argument('--fraction_of_data_to_use', type=float, default=50.0)
     
     # Retriever
+    parser.add_argument('--generation_model', type=str, default='single_retrieval', choices=[
+        'no_retrieval', 'single_retrieval'
+    ])
     parser.add_argument('--retriever_name', type=str, default='bge', choices=[
         'bm25', 'rerank_l6', 'rerank_l12', 'contriever', 'dpr', 'e5', 'bge'
     ])
     parser.add_argument('--data_dir', type=str, default='data/corpus')
-    parser.add_argument('--corpus_path', type=str, default='data/corpus/wiki-18_100.jsonl')
+    parser.add_argument('--corpus_path', type=str, default='data/corpus/wiki-18.jsonl')
     parser.add_argument('--retrieval_topk', type=int, default=3)
     parser.add_argument('--faiss_gpu', action='store_false', help='Use GPU for computation')
     parser.add_argument('--retrieval_query_max_length', type=int, default=64)
@@ -176,9 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--bm25_k1", type=float, default=0.9)
     parser.add_argument("--bm25_b", type=float, default=0.4)
     
-    parser.add_argument('--generation_model', type=str, default='single_retrieval', choices=[
-        'no_retrieval', 'single_retrieval'
-    ])
+    # Factuality Evaluation
     parser.add_argument('--claim_evaluation_method', type=str, default='RAFE', choices=[
         'SAFE', 'RAFE', 'FactScore', 'ICAT'
     ])
