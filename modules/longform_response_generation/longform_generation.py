@@ -11,10 +11,10 @@ from datasets import load_dataset
 from accelerate import Accelerator
 
 from utils.general_utils import set_seed
-from modules.generation.src.generation_models import *
-from modules.generation.src.decomposition_methods import *
-from modules.generation.src.claim_evaluation_methods.safe import ClaimEvaluator as SafeClaimEvaluator
-from modules.generation.src.claim_evaluation_methods.rafe import ClaimEvaluator as RafeClaimEvaluator
+from modules.longform_response_generation.src.retrieval_augmented_models import *
+from modules.longform_response_generation.src.decomposition_methods import *
+from modules.longform_response_generation.src.claim_evaluation_methods.safe import ClaimEvaluator as SafeClaimEvaluator
+from modules.longform_response_generation.src.claim_evaluation_methods.rafe import ClaimEvaluator as RafeClaimEvaluator
 
 os.environ["OPENAI_API_KEY"] = 'your_open_ai_key' #to use openai models
 os.environ['SERPER_API_KEY'] = 'your_serper_key' #for long form generation evaluation: https://serper.dev/
@@ -74,13 +74,10 @@ def generation(args):
     
     
     # === Generation Model ======================
-    backbone_model = transformers.AutoModelForCausalLM.from_pretrained(args.model_name_or_path, dtype=torch.bfloat16).to(device) # attn_implementation="eager"
-    backbone_tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_name_or_path)
-
     if args.generation_model == 'no_retrieval':
-        generation_model = NoRetrieval(backbone_model, backbone_tokenizer, device, args)
+        generation_model = NoRetrieval(device, args)
     elif args.generation_model == 'single_retrieval':
-        generation_model = SingleRetrieval(backbone_model, backbone_tokenizer, device, args)
+        generation_model = SingleRetrieval(device, args)
     else:
         raise NotImplementedError
 
@@ -166,7 +163,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--model_name_or_path', type=str, default='Qwen/Qwen2.5-7B-Instruct')
-    parser.add_argument('--decomposition_model_name_or_path', type=str, default='Qwen/Qwen2.5-7B-Instruct')
     parser.add_argument('--dataset', type=str, default='factscore_bio', choices=[
         'factscore_bio', 'longfact_concepts', 'longfact_objects'
     ])
@@ -176,9 +172,19 @@ if __name__ == "__main__":
     parser.add_argument('--generation_model', type=str, default='single_retrieval', choices=[
         'no_retrieval', 'single_retrieval'
     ])
-    parser.add_argument('--retriever_name', type=str, default='bge', choices=[
+    parser.add_argument('--generation_retriever_name', type=str, default='bge', choices=[
         'bm25', 'rerank_l6', 'rerank_l12', 'contriever', 'dpr', 'e5', 'bge'
     ])
+    
+    # Factuality Evaluation
+    parser.add_argument('--claim_evaluation_method', type=str, default='RAFE', choices=[
+        'SAFE', 'RAFE', 'FactScore', 'ICAT'
+    ])
+    parser.add_argument('--decomposition_model_name_or_path', type=str, default='Qwen/Qwen2.5-7B-Instruct')
+    parser.add_argument('--evaluation_retriever_name', type=str, default='bm25', choices=[
+        'bm25', 'rerank_l6', 'rerank_l12', 'contriever', 'dpr', 'e5', 'bge'
+    ])
+    
     parser.add_argument('--data_dir', type=str, default='data/corpus')
     parser.add_argument('--corpus_path', type=str, default='data/corpus/wiki-18.jsonl')
     parser.add_argument('--retrieval_topk', type=int, default=3)
@@ -189,10 +195,7 @@ if __name__ == "__main__":
     parser.add_argument("--bm25_k1", type=float, default=0.9)
     parser.add_argument("--bm25_b", type=float, default=0.4)
     
-    # Factuality Evaluation
-    parser.add_argument('--claim_evaluation_method', type=str, default='RAFE', choices=[
-        'SAFE', 'RAFE', 'FactScore', 'ICAT'
-    ])
+    
     
     # Others
     parser.add_argument('--device', type=int, default=0)
